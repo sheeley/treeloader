@@ -35,3 +35,14 @@ func (ss StringSet) Remove(sColl ...string) {
 		delete(ss, s)
 	}
 }
+
+// Difference returns any string that exists in the current stringset but not ss2
+func (ss StringSet) Difference(ss2 StringSet) []string {
+	var diff []string
+	for s := range ss {
+		if _, ok := ss2[s]; !ok {
+			diff = append(diff, s)
+		}
+	}
+	return diff
+}

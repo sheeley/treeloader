@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	data := []byte(`{"response": "before"}`)
+	data := []byte(`{"response": "after"}`)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write(data)
 	})

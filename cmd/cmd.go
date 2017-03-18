@@ -9,20 +9,19 @@ import (
 )
 
 var (
-	cmd        string
 	verbose    bool
-	extensions = treeloader.DefaultExtensions
+	extensions = treeloader.StringSet{}
 )
 
 func main() {
 	flag.BoolVar(&verbose, "v", true, "Enable verbose messaging")
 	flag.BoolVar(&verbose, "verbose", true, "Enable verbose messaging")
-	flag.Var(&extensions, "e", "Comma delimited list of file extensions to watch (defaults to .go)")
-	flag.Var(&extensions, "extensions", "Comma delimited list of file extensions to watch (defaults to .go)")
+	flag.Var(&extensions, "e", "Comma delimited list of file extensions to watch")
+	flag.Var(&extensions, "extensions", "Comma delimited list of file extensions to watch")
 	flag.Parse()
-	cmd = flag.Arg(0)
+	cmd := flag.Arg(0)
 
-	cmd = "example/looper/looper.go"
+	cmd = "example/http/main.go"
 
 	if cmd == "" {
 		flag.Usage()

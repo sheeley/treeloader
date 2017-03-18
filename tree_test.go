@@ -1,7 +1,7 @@
 package treeloader_test
 
 import (
-	. "github.com/sheeley/treeloader"
+	"fmt"
 
 	"io/ioutil"
 
@@ -9,18 +9,29 @@ import (
 
 	"strings"
 
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/sheeley/treeloader"
 )
 
-var (
-	beforebyte = []byte(`{"response": "before"}`)
-	afterbyte  = []byte(`{"response": "after"}`)
-)
+func copy(src string, dst string) {
+	// Read all content of src to data
+	data, err := ioutil.ReadFile(src)
+	if err != nil {
+		panic(err)
+	}
+	// Write data to dst
+	err = ioutil.WriteFile(dst, data, 0644)
+	if err != nil {
+		panic(err)
+	}
+}
 
 var _ = Describe("Tree", func() {
 	It("should properly calculate dependencies", func() {
-		deps, err := DirsToWatch("example/main.go")
+		deps, err := treeloader.DirsToWatch("example/main.go")
 		Expect(err).To(BeNil())
 		Expect(deps).To(BeEquivalentTo(map[string]int{
 			"github.com/sheeley/treeloader/example":             1,
@@ -31,39 +42,87 @@ var _ = Describe("Tree", func() {
 	})
 
 	It("should restart a http server", func(done Done) {
-		configFile := "example/http/config.json"
-		ioutil.WriteFile(configFile, beforebyte, 600)
+		// tmpdir, err := ioutil.TempDir("", "httptest")
+		// if err != nil {
+		// 	panic(err)
+		// }
+		goFile := "example/http/main.go"
+		copy("example/http/source/before.go", goFile)
 		reloaded := make(chan string, 1)
-		opts := &Options{
-			Reloaded:   reloaded,
-			CmdPath:    "example/http/main.go",
-			Extensions: StringSet{"json": 1},
-		}
-		runner, err := New(opts)
+		runner, err := treeloader.New(&treeloader.Options{
+			Reloaded: reloaded,
+			CmdPath:  "example/http/main.go",
+			Verbose:  true,
+		})
 		Expect(err).To(BeNil())
 		defer runner.Close()
 
 		// start, check response for initial value
-		go runner.Run()
+		go func() {
+			if err := runner.Run(); err != nil {
+				panic(err)
+			}
+		}()
 		Expect(<-reloaded).To(BeEquivalentTo(""))
-		resp, err := http.Get("http://localhost:8080")
+		resp, err := http.Get("http://127.0.0.1:8080")
+		if err != nil {
+			fmt.Println(err)
+		}
 		Expect(err).To(BeNil())
 		defer resp.Body.Close()
 		body, err := ioutil.ReadAll(resp.Body)
 		Expect(err).To(BeNil())
-		Expect(body).To(BeEquivalentTo(beforebyte))
+		Expect(body).To(BeEquivalentTo([]byte(`{"response": "before"}`)))
 
-		// change config.json, check http response
-		ioutil.WriteFile(configFile, afterbyte, 600)
+		time.Sleep(1 * time.Second)
+		copy("example/http/source/after.go", goFile)
 		changedFile := <-reloaded
-		Expect(strings.HasSuffix(changedFile, configFile)).To(BeTrue())
-		resp, err = http.Get("http://localhost:8080")
+		Expect(strings.HasSuffix(changedFile, goFile)).To(BeTrue())
+		resp, err = http.Get("http://127.0.0.1:8080")
 		Expect(err).To(BeNil())
 		defer resp.Body.Close()
 		body, err = ioutil.ReadAll(resp.Body)
 		Expect(err).To(BeNil())
-		Expect(body).To(BeEquivalentTo(afterbyte))
+		Expect(body).To(BeEquivalentTo([]byte(`{"response": "after"}`)))
 
 		close(done)
-	}, 2)
+	}, 3)
+
+	// It("should restart a http server when json changes", func(done Done) {
+	// 	configFile := "example/http/config.json"
+	// 	ioutil.WriteFile(configFile, beforebyte, 600)
+	// 	reloaded := make(chan string, 1)
+	// 	opts := &Options{
+	// 		Reloaded:   reloaded,
+	// 		CmdPath:    "example/http/main.go",
+	// 		Extensions: StringSet{"json": 1},
+	// 	}
+	// 	runner, err := New(opts)
+	// 	Expect(err).To(BeNil())
+	// 	defer runner.Close()
+
+	// 	// start, check response for initial value
+	// 	go runner.Run()
+	// 	Expect(<-reloaded).To(BeEquivalentTo(""))
+	// 	resp, err := http.Get("http://127.0.0.1:8080")
+	// 	Expect(err).To(BeNil())
+	// 	defer resp.Body.Close()
+	// 	body, err := ioutil.ReadAll(resp.Body)
+	// 	Expect(err).To(BeNil())
+	// 	Expect(body).To(BeEquivalentTo(beforebyte))
+
+	// 	time.Sleep(1 * time.Second)
+	// 	// change config.json, check http response
+	// 	ioutil.WriteFile(configFile, afterbyte, 600)
+	// 	changedFile := <-reloaded
+	// 	Expect(strings.HasSuffix(changedFile, configFile)).To(BeTrue())
+	// 	resp, err = http.Get("http://127.0.0.1:8080")
+	// 	Expect(err).To(BeNil())
+	// 	defer resp.Body.Close()
+	// 	body, err = ioutil.ReadAll(resp.Body)
+	// 	Expect(err).To(BeNil())
+	// 	Expect(body).To(BeEquivalentTo(afterbyte))
+
+	// 	close(done)
+	// }, 3)
 })
